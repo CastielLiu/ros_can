@@ -57,9 +57,9 @@ UsbCanDriver::~UsbCanDriver()
 void UsbCanDriver::closeDevice()
 {
 	if(1 == VCI_CloseDevice(VCI_USBCAN2,DEVICE_INDEX))
-		ROS_INFO("[%s] close device ok.", _NODE_NAME_);
+		printf("[%s] close device ok.\r\n", _NODE_NAME_);
 	else
-		ROS_ERROR("[%s] close device failed.", _NODE_NAME_);
+		printf("[%s] close device failed.\r\n", _NODE_NAME_);
 }
 
 bool UsbCanDriver::rosInit()
@@ -135,6 +135,10 @@ bool UsbCanDriver::configCanChannel(int channel)
 	VCI_INIT_CONFIG config;
 	config.AccCode = mAccCode[channel];
 	config.AccMask = mMaskCode[channel];
+	
+	cout << "[" << _NODE_NAME_ << "] " << "ch" << channel << "\t"
+		 << hex << config.AccCode << "\t" << config.AccMask << endl;
+	
 	config.Filter =  mFilterMode[channel];
 	if(mBaudrate[channel] == 125)
 	{
@@ -187,14 +191,15 @@ bool UsbCanDriver::deviceInit()
 	int deviceCnt = VCI_FindUsbDevice2(deviceInfos);
 	if(deviceCnt <1 )
 	{
-		ROS_ERROR("%s : No available can device.",_NODE_NAME_);
+		ROS_ERROR("[%s] : No available can device.",_NODE_NAME_);
 		return false;
 	}
+	
 	if(VCI_OpenDevice(VCI_USBCAN2,DEVICE_INDEX,0)==1)
-		ROS_INFO("%s : open usbcan deivce success!",_NODE_NAME_);
+		ROS_INFO("[%s] : open usbcan deivce success!",_NODE_NAME_);
 	else
 	{
-		ROS_ERROR("%s : open usbcan deivce failed!",_NODE_NAME_);
+		ROS_ERROR("[%s] : open usbcan deivce failed!",_NODE_NAME_);
 		return false;
 	}
 	
@@ -208,17 +213,18 @@ bool UsbCanDriver::deviceInit()
 
 void UsbCanDriver::receiveThread()
 {
-	const int MaxLen = 1000;
+	const int MaxLen = 500;
 	VCI_CAN_OBJ msgs[MaxLen];
 	can_msgs::FrameArray frames;
-	
+	int reclen;
 	while(ros::ok())
 	{
 		for(int channel=0; channel<CHANNEL_CNT; ++channel)
 		{
-			int reclen = VCI_Receive(VCI_USBCAN2,DEVICE_INDEX,channel,msgs,MaxLen,0);
+			reclen = VCI_Receive(VCI_USBCAN2,DEVICE_INDEX,channel,msgs,MaxLen,100);
 			if(reclen <= 0) continue;
-			ROS_INFO("[%s] receive msgs len: %d",reclen);
+			//ROS_INFO("[%s] receive msgs len: %d",_NODE_NAME_,reclen);
+			
 			frames.frames.resize(reclen);
 			frames.header.frame_id = mFrameId[channel];
 			
@@ -232,7 +238,7 @@ void UsbCanDriver::receiveThread()
 					frames.frames[i].data[j] = msgs[i].Data[j];
 			}
 			mPub.publish(frames);
-			ROS_INFO("[%s] : published ");
+			//ROS_INFO("[%s] : published ",_NODE_NAME_);
 		}
 		
 		usleep(10000);
@@ -240,10 +246,11 @@ void UsbCanDriver::receiveThread()
 	}
 }
 
+
 void UsbCanDriver::run()
 {
-	if(!rosInit())    return; else ROS_INFO("rosInit ok");
-	if(!deviceInit()) return; else ROS_INFO("deviceInit ok");
+	if(!rosInit())    return; //else ROS_INFO("rosInit ok");
+	if(!deviceInit()) return; //else ROS_INFO("deviceInit ok");
 	
 	ROS_DEBUG("asdfgf");
 	std::thread t(&UsbCanDriver::receiveThread,this);
