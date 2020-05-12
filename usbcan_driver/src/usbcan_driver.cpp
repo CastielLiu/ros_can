@@ -74,10 +74,15 @@ bool UsbCanDriver::rosInit()
 	ok = ros::param::get("~acc_code",mAccCode);
 	if(!ok)
 		for(int &acc:mAccCode) acc = 0x00000000;
+	else
+		for(int &acc:mAccCode) acc <<= 21;
+		
 	
 	ok = ros::param::get("~mask_code",mMaskCode);
 	if(!ok)
 		for(int &mask:mMaskCode) mask = 0xFFFFFFFF;
+	else
+		for(int &mask:mMaskCode) mask <<= 21;
 		
 	ok = ros::param::get("~baudrate",mBaudrate);
 	if(!ok)
@@ -252,7 +257,6 @@ void UsbCanDriver::run()
 	if(!rosInit())    return; //else ROS_INFO("rosInit ok");
 	if(!deviceInit()) return; //else ROS_INFO("deviceInit ok");
 	
-	ROS_DEBUG("asdfgf");
 	std::thread t(&UsbCanDriver::receiveThread,this);
 	
 	ros::spin();
@@ -271,9 +275,4 @@ int main(int argc,char** argv)
 	return 0;
 }
 
-
-
-
-//export QTDIR=/opt/Qt5.9.9/Tools/QtCreator
-//export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$QTDIR/lib
-//export PATH=$PATH:$QTDIR/bin
+ 
