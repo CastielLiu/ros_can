@@ -24,7 +24,7 @@ private:
 	bool deviceInit();
 	void closeDevice();
 	bool configCanChannel(int channel);
-	void callback(const can_msgs::FrameArray::ConstPtr& msgs);
+	void frameArray_callback(const can_msgs::FrameArray::ConstPtr& msgs);
 	void receiveThread();
 	
 private:
@@ -36,7 +36,7 @@ private:
 	vector<int>    mBaudrate;
 	vector<string> mFrameId;     //不同frame_id 对应不同的通道
 	
-	ros::Subscriber mSub;
+	ros::Subscriber mSubFrameArray;
 	ros::Publisher  mPub;
 };
 
@@ -65,6 +65,7 @@ void UsbCanDriver::closeDevice()
 bool UsbCanDriver::rosInit()
 {
 	ros::NodeHandle nh;
+	ros::NodeHandle nh_private("~");
 	bool ok = false;
 	
 	ok = ros::param::get("~filter_mode",mFilterMode);
@@ -77,7 +78,6 @@ bool UsbCanDriver::rosInit()
 	else
 		for(int &acc:mAccCode) acc <<= 21;
 		
-	
 	ok = ros::param::get("~mask_code",mMaskCode);
 	if(!ok)
 		for(int &mask:mMaskCode) mask = 0xFFFFFFFF;
@@ -101,18 +101,21 @@ bool UsbCanDriver::rosInit()
 		return false;
 	}
 	
-	mSub = nh.subscribe("/to_usbcan",100,&UsbCanDriver::callback,this);
-	mPub = nh.advertise<can_msgs::FrameArray>("/from_usbcan",100);
+	std::string to_can_topic   = nh_private.param<std::string>("to_can_topic","/to_usbcan");
+	std::string from_can_topic = nh_private.param<std::string>("from_can_topic","/from_usbcan");
+	
+	mSubFrameArray = nh.subscribe(to_can_topic,100,&UsbCanDriver::frameArray_callback,this);
+	mPub = nh.advertise<can_msgs::FrameArray>(from_can_topic, 100);
 	return true;
 }
 
-void UsbCanDriver::callback(const can_msgs::FrameArray::ConstPtr& msgs)
+void UsbCanDriver::frameArray_callback(const can_msgs::FrameArray::ConstPtr& msgs)
 {
 	for(int channel=0; channel<CHANNEL_CNT; ++channel)
 	{
 		if(mFrameId[channel] != msgs->header.frame_id)
 			continue;
-		
+
 		//ROS_INFO("callback %d", msgs->frames.size());
 		for(int i=0; i< msgs->frames.size(); ++i)
 		{
@@ -134,6 +137,7 @@ void UsbCanDriver::callback(const can_msgs::FrameArray::ConstPtr& msgs)
 	}
 	
 }
+
 // 配置设备通道
 bool UsbCanDriver::configCanChannel(int channel)
 {
