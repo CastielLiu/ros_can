@@ -1,13 +1,12 @@
 <!--   -->
 
 <launch>
-	<arg name="logfile" default="">
+	<arg name="log_dir" default="/tmp/log/usbcan/"/>
 
 	<node name="usbcan_driver_node" pkg="usbcan_driver" type="usbcan_driver_node" output="screen">
 		<rosparam param="baudrate" > [500,500] </rosparam>
 		<rosparam param="frame_id" > ["channel1","channel2"] </rosparam>
+		<param name ="log_dir"    type ="string"  value="$(arg log_dir)"/>
 	</node>
-
-	<param name ="log_file"    type ="string"  value="$(arg logfile)"/>
 
 </launch>

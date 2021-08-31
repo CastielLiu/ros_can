@@ -13,103 +13,7 @@ using namespace std;
 #define DEVICE_INDEX 0
 #define CHANNEL_CNT  2
 
-#include <ctime>
-#include <cassert>
-class Log
-{
-/*
-Log log;
-log.init("log.txt", true);
-log.addIntervalWriter("device_status", 0, 2.0);
-log.addIntervalWriter("error_info", 1, 1.0);
-
-
-log.write("匿名用户数据, 直接写入不进行判断");
-log.write("非用户数据, 需要传递用户id", 0);
-
-*/
-
-public:
-	Log()
-	{
-		enable = false;
-		filename = "";
-	}
-
-	~Log()
-	{
-		if(of_handle.is_open())
-			of_handle.close();
-	}
-
-	bool init(const std::string& _filename, bool _enable)
-	{
-		filename = _filename;
-		enable = _enable;
-		if(enable)
-		{
-			of_handle.open(filename.c_str());
-			if(!of_handle.is_open())
-				enable = false;
-		}
-	}
-
-	/*@param 添加需要固定时间间隔写入的用户
-	 *@param writername 写者名称，仅用于用户对照名称和id
-	 *@param writer_id  写者ID，必须按顺序写0-1-2-...
-	 *@param delay_s 间隔时间
-	*/
-	void addIntervalWriter(const std::string& writername, int writer_id, float delay_s)
-	{
-		if(writers_lasttime.size() != writer_id)
-		{
-			std::cerr << "Log class error: writer_id must be completed in order 0-1-2-3..." << std::endl;
-			exit(0);
-		}
-		writers_lasttime.push_back(0);
-		writers_interval.push_back(delay_s);
-		writer_size = writers_lasttime.size();
-	}
-
-	/*@brief 写log到日志文件
-     *@param info 数据
-	 *@param writer_id 写者ID，默认为-1 匿名写者
-	*/
-	void write(const std::string& info, int writer_id=-1)
-	{
-		if(writer_id < -1 || writer_id >= writer_size)
-			return;
-		
-		std::time_t now = std::time(0);
-		if(writer_id == -1)
-			goto write_log_info_to_file_by_log_class;
-		
-		if(now - writers_lasttime[writer_id] >= writers_interval[writer_id])
-		{
-			writers_lasttime[writer_id] = now;
-			goto write_log_info_to_file_by_log_class;
-		}
-
-	write_log_info_to_file_by_log_class:
-			
-		std::tm *ltm = std::localtime(&now);
-		of_handle << ltm->tm_year+1990 << "-" << ltm->tm_mon << "-" << ltm->tm_mday << " "
-				<< ltm->tm_hour << ":" << ltm->tm_min << ":" << ltm->tm_sec << " "
-				<<  info << std::endl;
-	}
-
-
-public:
-	std::string filename;
-	bool enable;
-	
-private:
-	std::ofstream of_handle;
-
-	std::vector<std::time_t> writers_lasttime;
-	std::vector<float> writers_interval;
-	size_t writer_size = 0;
-};
+#include "log.h"
 
 class UsbCanDriver
 {
@@ -139,9 +43,7 @@ private:
 	ros::Publisher  mPub;
 	
 	// 日志文件
-	std::string mLogFile;
-	std::ofstream mOutLog;
-	bool mIsLog;
+	Log mLog;
 };
 
 UsbCanDriver::UsbCanDriver()
@@ -205,15 +107,10 @@ bool UsbCanDriver::rosInit()
 		return false;
 	}
 	
-	mLogFile = nh_private.param<std::string>("log_file", "");
-	if(mLogFile == "")
-	    mIsLog = false;
-    else
-    {
-        mOutLog.open(mLogFile.c_str());
-		if(!mOutLog.is_open())
-			mIsLog = false;
-    }
+	std::string log_dir = nh_private.param<std::string>("log_dir", "");
+	if(!mLog.init(log_dir))
+		return false;
+	mLog.addIntervalWriter("new_data", 0, 10.0);
 	
 	std::string to_can_topic   = nh_private.param<std::string>("to_can_topic","/to_usbcan");
 	std::string from_can_topic = nh_private.param<std::string>("from_can_topic","/from_usbcan");
@@ -250,8 +147,8 @@ void UsbCanDriver::frameArray_callback(const can_msgs::FrameArray::ConstPtr& msg
 			VCI_Transmit(VCI_USBCAN2, DEVICE_INDEX, channel, &canObj, 1);
 		}
 	}
-	
-	
+
+	mLog.write("running", 0); //device is running and have new data
 }
 
 // 配置设备通道
@@ -376,11 +273,15 @@ void UsbCanDriver::run()
 {
 	if(!rosInit())    return; //else ROS_INFO("rosInit ok");
 	if(!deviceInit()) return; //else ROS_INFO("deviceInit ok");
+	mLog.write("device is opend!");
 	
 	std::thread t(&UsbCanDriver::receiveThread,this);
 	
 	ros::spin();
+
+	mLog.write("ros is shutdown!");
 	closeDevice();
+	mLog.write("device is closed!");	
 }
 
 int main(int argc,char** argv)
